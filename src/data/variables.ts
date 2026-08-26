@@ -154,6 +154,66 @@ export const variableDefinitions: Record<string, VariableDefinition> = {
     // ─────────────────────────────────────────
     // SECTION: The Sequence Comes Back Around
     // ─────────────────────────────────────────
+    // ─────────────────────────────────────────
+    // SECTION: One Stream, Both Ends
+    // ─────────────────────────────────────────
+    bothEndsMessage: {
+        defaultValue: 178,
+        type: 'number',
+        label: 'Message bits',
+        description: 'The eight-bit message, held as a number 0-255',
+        min: 0,
+        max: 255,
+        step: 1,
+    },
+    bothEndsSeed: {
+        defaultValue: 6,
+        type: 'number',
+        label: 'Shared starting bits',
+        description: 'The four-bit seed both registers start from, as a number 1-15',
+        min: 1,
+        max: 15,
+        step: 1,
+        color: '#62D0AD',
+    },
+    bothEndsFlips: {
+        defaultValue: 0,
+        type: 'number',
+        label: 'Bits flipped',
+        description: 'How many message bits the student has flipped in the sender-receiver figure',
+        min: 0,
+        max: 99,
+        step: 1,
+    },
+    bothEndsHighlight: {
+        defaultValue: '',
+        type: 'text',
+        label: 'Sender-receiver highlight',
+        description: 'Shared highlight id linking the sender and receiver views (message, keystream, sent, recovered, bit-0 to bit-7)',
+        color: '#62D0AD',
+        bgColor: 'rgba(98, 208, 173, 0.2)',
+    },
+    answer_both_ends_sent_bit: {
+        defaultValue: '',
+        type: 'text',
+        label: 'Sent bit answer',
+        description: 'Student answer for the bit sent when message bit and keystream bit are both 1',
+        placeholder: '?',
+        correctAnswer: '0',
+        color: '#8E90F5',
+        bgColor: 'rgba(142, 144, 245, 0.15)',
+    },
+    answer_both_ends_shared: {
+        defaultValue: '',
+        type: 'select',
+        label: 'Shared secret answer',
+        description: 'Student answer for what the two ends must share',
+        placeholder: '???',
+        correctAnswer: 'the taps and the starting bits',
+        options: ['the taps and the starting bits', 'the message itself', 'the scrambled bits', 'a stored table of noise'],
+        color: '#8E90F5',
+        bgColor: 'rgba(142, 144, 245, 0.15)',
+    },
     cycleSeedValue: {
         defaultValue: 1,
         type: 'number',
