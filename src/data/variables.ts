@@ -81,6 +81,55 @@ export interface VariableDefinition {
  *    { defaultValue: { x: 5, y: 10 }, type: 'object', schema: '{ x: number, y: number }' }
  */
 export const variableDefinitions: Record<string, VariableDefinition> = {
+    // ─────────────────────────────────────────
+    // SECTION: One Clock Tick
+    // ─────────────────────────────────────────
+    clockTickSeed: {
+        defaultValue: [1, 1, 0, 1],
+        type: 'array',
+        label: 'Starting bits',
+        description: 'The four bits the register starts from in the one-clock-tick figure',
+    },
+    clockTickCount: {
+        defaultValue: 0,
+        type: 'number',
+        label: 'Clock ticks',
+        description: 'How many clock ticks the register has taken from its starting bits',
+        min: 0,
+        max: 12,
+        step: 1,
+        color: '#62D0AD',
+    },
+    clockTickHighlight: {
+        defaultValue: '',
+        type: 'text',
+        label: 'Clock tick highlight',
+        description: 'Active highlight id in the one-clock-tick figure (taps, feedback, output)',
+        color: '#62D0AD',
+        bgColor: 'rgba(98, 208, 173, 0.2)',
+    },
+    answer_clock_tick_next_state: {
+        defaultValue: '',
+        type: 'text',
+        label: 'Next state answer',
+        description: 'Student answer for the state one tick after 0110',
+        placeholder: '????',
+        correctAnswer: '1011',
+        color: '#8E90F5',
+        bgColor: 'rgba(142, 144, 245, 0.15)',
+    },
+    answer_clock_tick_feedback_destination: {
+        defaultValue: '',
+        type: 'select',
+        label: 'Feedback destination answer',
+        description: 'Student answer for where the XOR result is written',
+        placeholder: '???',
+        correctAnswer: 'the front cell',
+        options: ['the front cell', 'the last cell', 'the output line', 'both tapped cells'],
+        color: '#8E90F5',
+        bgColor: 'rgba(142, 144, 245, 0.15)',
+    },
+
     // ========================================
     // ADD YOUR VARIABLES HERE
     // ========================================
