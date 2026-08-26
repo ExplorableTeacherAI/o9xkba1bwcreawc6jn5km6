@@ -23,7 +23,6 @@ import {
 // ── Domain model: a 4-bit LFSR tapped at the two right-hand cells ────────────
 // State is held as a number 0-15 so both views read exactly the same value.
 
-const STATE_COUNT = 16;
 const MAX_TICKS = 15;
 
 const bitsOf = (state: number): number[] => [3, 2, 1, 0].map((shift) => (state >> shift) & 1);
@@ -69,9 +68,25 @@ const RING_C = 180;
 const R_DOT = 104;
 const R_LABEL = 126;
 
-const ringAngle = (state: number) => (-90 + state * (360 / STATE_COUNT)) * (Math.PI / 180);
-const ringX = (state: number, radius: number) => RING_C + radius * Math.cos(ringAngle(state));
-const ringY = (state: number, radius: number) => RING_C + radius * Math.sin(ringAngle(state));
+/** The states in the order the register actually visits them, so the walk runs
+ *  clockwise round the ring instead of jumping across it. All-zeros is not on
+ *  the cycle at all, so it sits alone in the middle. */
+const CYCLE: number[] = (() => {
+    const order: number[] = [1];
+    while (order.length < 16) {
+        const following = nextState(order[order.length - 1]);
+        if (following === order[0]) break;
+        order.push(following);
+    }
+    return order;
+})();
+
+const ringSlot = (state: number) => CYCLE.indexOf(state);
+const ringAngle = (state: number) => (-90 + ringSlot(state) * (360 / CYCLE.length)) * (Math.PI / 180);
+const ringX = (state: number, radius: number) =>
+    ringSlot(state) < 0 ? RING_C : RING_C + radius * Math.cos(ringAngle(state));
+const ringY = (state: number, radius: number) =>
+    ringSlot(state) < 0 ? RING_C : RING_C + radius * Math.sin(ringAngle(state));
 
 function StateRingDrawing() {
     const setVar = useSetVar();
@@ -96,13 +111,19 @@ function StateRingDrawing() {
 
     return (
         <svg viewBox={`0 0 ${RING_VIEW} ${RING_VIEW}`} className="block w-full">
-            {/* the sixteen states */}
+            {/* the path the register walks, drawn once as a quiet guide */}
+            <circle cx={RING_C} cy={RING_C} r={R_DOT} fill="none" stroke={INK} strokeWidth={1} opacity={recede * 0.3} style={EASE} />
+
+            {/* the sixteen states: fifteen on the ring, all-zeros in the middle */}
             <g opacity={recede} style={EASE}>
-                {Array.from({ length: STATE_COUNT }, (_, state) => {
+                {[...CYCLE, 0].map((state) => {
                     const cos = Math.cos(ringAngle(state));
                     const sin = Math.sin(ringAngle(state));
                     const anchor = cos > 0.35 ? "start" : cos < -0.35 ? "end" : "middle";
-                    const labelY = ringY(state, R_LABEL) + (sin < -0.35 ? -6 : sin > 0.35 ? 14 : 4);
+                    const onRing = ringSlot(state) >= 0;
+                    const labelY = onRing
+                        ? ringY(state, R_LABEL) + (sin < -0.35 ? -6 : sin > 0.35 ? 14 : 4)
+                        : RING_C + 34;
                     return (
                         <g key={`state-${state}`}>
                             <circle
@@ -120,9 +141,9 @@ function StateRingDrawing() {
                                 }}
                             />
                             <text
-                                x={ringX(state, R_LABEL)}
+                                x={onRing ? ringX(state, R_LABEL) : RING_C}
                                 y={labelY}
-                                textAnchor={anchor}
+                                textAnchor={onRing ? anchor : "middle"}
                                 fill={INK}
                                 fontSize="10"
                                 style={{ fontVariantNumeric: "tabular-nums" }}
@@ -155,11 +176,11 @@ function StateRingDrawing() {
             {/* the all-zeros state, which feeds itself */}
             <g opacity={dim("zerostate")} style={EASE} {...hover("zerostate")}>
                 {isOn("zerostate") && (
-                    <circle cx={ringX(0, R_DOT)} cy={ringY(0, R_DOT) - 13} r={11} fill="none" stroke={INK} strokeWidth={9} opacity={0.28} />
+                    <circle cx={RING_C} cy={RING_C - 13} r={11} fill="none" stroke={INK} strokeWidth={9} opacity={0.28} />
                 )}
                 <circle
-                    cx={ringX(0, R_DOT)}
-                    cy={ringY(0, R_DOT) - 13}
+                    cx={RING_C}
+                    cy={RING_C - 13}
                     r={11}
                     fill="none"
                     stroke={INK}
@@ -186,7 +207,7 @@ function StateRingFigure() {
                 setVar("cycleSeedValue", 1);
                 setVar("cycleCount", 0);
             }}
-            caption="Every four-bit pattern, one dot each. Click a dot to start the register there and the trail follows it from tick to tick."
+            caption="The fifteen usable patterns in the order the register meets them, so each tick moves one step clockwise. All-zeros sits alone in the middle. Click any dot to start there."
         >
             <StateRingDrawing />
             <InteractionHintSequence
@@ -486,8 +507,8 @@ export const theSequenceComesBackAroundBlocks: ReactElement[] = [
                         steps: [
                             {
                                 gesture: "click",
-                                label: "Click the 0000 dot at the top of the ring",
-                                position: { x: "50%", y: "18%" },
+                                label: "Click the 0000 dot in the middle of the ring",
+                                position: { x: "50%", y: "50%" },
                                 completionVar: "cycleSeedValue",
                                 completionValue: 0,
                                 completionTolerance: 0,
@@ -495,7 +516,7 @@ export const theSequenceComesBackAroundBlocks: ReactElement[] = [
                             {
                                 gesture: "click",
                                 label: "Now press the clock a few times and watch how far the marker gets",
-                                position: { x: "50%", y: "18%" },
+                                position: { x: "50%", y: "50%" },
                                 completionVar: "cycleCount",
                                 completionValue: 3,
                                 completionTolerance: 2,
