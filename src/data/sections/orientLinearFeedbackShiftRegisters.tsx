@@ -120,18 +120,23 @@ export const orientLinearFeedbackShiftRegistersBlocks: ReactElement[] = [
     <StackLayout key="layout-orient-hook" maxWidth="xl">
         <Block id="orient-hook" padding="sm">
             <EditableParagraph id="para-orient-hook" blockId="orient-hook">
-                Every Wi-Fi packet your phone sends goes out scrambled. Not encrypted, just
-                scrambled: the transmitter XORs the payload against a{" "}
-                <InlineTooltip color="#64748B" bgColor="rgba(100, 116, 139, 0.15)" id="tooltip-orient-prbs" tooltip="Pseudo-random binary sequence: a bit stream that passes statistical tests for randomness yet is produced by a deterministic rule, so it can be regenerated exactly.">
-                    pseudo-random binary sequence
-                </InlineTooltip>
-                , and the receiver XORs the identical sequence back off it. That sequence is not
-                noise. It falls out of a handful of{" "}
-                <InlineTooltip color="#64748B" bgColor="rgba(100, 116, 139, 0.15)" id="tooltip-orient-flipflop" tooltip="A one-bit memory element that copies its input to its output on the edge of a clock signal. A row of them is a shift register.">
-                    flip-flops
-                </InlineTooltip>
-                {" "}and one XOR gate, cheap enough to put in everything. It is called a linear
-                feedback shift register.
+                <span className="block">• Every Wi-Fi packet your phone sends goes out scrambled, not encrypted.</span>
+                <span className="block">
+                    • The transmitter XORs the payload against a{" "}
+                    <InlineTooltip color="#64748B" bgColor="rgba(100, 116, 139, 0.15)" id="tooltip-orient-prbs" tooltip="Pseudo-random binary sequence: a bit stream that passes statistical tests for randomness yet is produced by a deterministic rule, so it can be regenerated exactly.">
+                        pseudo-random binary sequence
+                    </InlineTooltip>
+                    , and the receiver XORs the identical sequence back off it.
+                </span>
+                <span className="block">• That sequence is not noise. It is produced by a fixed rule, so both ends can regenerate it exactly.</span>
+                <span className="block">
+                    • It falls out of a handful of{" "}
+                    <InlineTooltip color="#64748B" bgColor="rgba(100, 116, 139, 0.15)" id="tooltip-orient-flipflop" tooltip="A one-bit memory element that copies its input to its output on the edge of a clock signal. A row of them is a shift register.">
+                        flip-flops
+                    </InlineTooltip>
+                    {" "}and one XOR gate, cheap enough to put in everything.
+                </span>
+                <span className="block">• That circuit is called a linear feedback shift register.</span>
             </EditableParagraph>
         </Block>
     </StackLayout>,
