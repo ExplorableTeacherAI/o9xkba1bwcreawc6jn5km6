@@ -9,33 +9,37 @@ import {
     InlineClozeInput,
     InlineClozeChoice,
     InlineFeedback,
+    InlineFormula,
+    InlineTooltip,
+    InlineTrigger,
     InteractionHintSequence,
 } from "@/components/atoms";
-import { Figure } from "@/components/molecules";
+import { Figure, FormulaBlock } from "@/components/molecules";
 import { useVar, useSetVar } from "@/stores";
 import { clamp, useSpring } from "@/lib/motion";
+import { LFSR, bitsOfState, stateOfBits } from "../lfsrPalette";
 import {
     getVariableInfo,
     numberPropsFromDefinition,
     clozePropsFromDefinition,
     choicePropsFromDefinition,
-    linkedHighlightPropsFromDefinition,
 } from "../variables";
 
-// ── Domain model: a 4-bit Fibonacci LFSR tapped at the two right-hand cells ──
+// ── Domain model: a 4-bit Fibonacci LFSR tapped at cells 3 and 4 ────────────
+// Tap polynomial f(x) = 1 + x^3 + x^4, which is primitive over GF(2).
 
 const CELL_COUNT = 4;
-const TAP_A = 2; // third cell (zero-based)
-const TAP_B = 3; // fourth cell
-const DEFAULT_SEED = [1, 1, 0, 1];
+const TAP_A = 2; // cell 3 (zero-based)
+const TAP_B = 3; // cell 4
+const DEFAULT_SEED = 13; // 1101
 
 function stepOnce(bits: number[]): { bits: number[]; output: number } {
     const feedback = bits[TAP_A] ^ bits[TAP_B];
     return { bits: [feedback, ...bits.slice(0, CELL_COUNT - 1)], output: bits[CELL_COUNT - 1] };
 }
 
-function stateAfter(seed: number[], ticks: number): { bits: number[]; output: number | null } {
-    let bits = seed.slice();
+function stateAfter(seed: number, ticks: number): { bits: number[]; output: number | null } {
+    let bits = bitsOfState(seed);
     let output: number | null = null;
     for (let i = 0; i < ticks; i += 1) {
         const result = stepOnce(bits);
@@ -56,22 +60,17 @@ const CELL_X0 = 152;
 const CELL_Y = 96;
 const PAD = 24;
 
-const INK = "#64748B";
-const INK_DARK = "#334155";
-const ACCENT = "#62D0AD";
-const PARTNER = "#8E90F5";
-
 const cellX = (index: number) => CELL_X0 + index * PITCH;
 const cellCenterX = (index: number) => cellX(index) + CELL_W / 2;
 
 function OneClockTickDrawing() {
     const setVar = useSetVar();
-    const seedRaw = useVar<number[]>("clockTickSeed", DEFAULT_SEED);
+    const seed = useVar<number>("clockTickSeedValue", DEFAULT_SEED);
     const ticks = useVar<number>("clockTickCount", 0);
     const highlight = useVar<string>("clockTickHighlight", "");
 
-    const seed = Array.isArray(seedRaw) && seedRaw.length === CELL_COUNT ? seedRaw : DEFAULT_SEED;
     const { bits, output } = stateAfter(seed, ticks);
+    const incoming = bits[TAP_A] ^ bits[TAP_B];
 
     // Nothing teleports: the spring lags the tick counter, so the bits slide
     // one cell to the right instead of jumping there.
@@ -91,7 +90,7 @@ function OneClockTickDrawing() {
     const flipCell = (index: number) => {
         const next = bits.slice();
         next[index] = next[index] === 1 ? 0 : 1;
-        setVar("clockTickSeed", next);
+        setVar("clockTickSeedValue", stateOfBits(next));
         setVar("clockTickCount", 0);
     };
 
@@ -102,28 +101,40 @@ function OneClockTickDrawing() {
 
     return (
         <svg viewBox={`0 0 ${VIEW_W} ${VIEW_H}`} className="block w-full">
-            {/* readouts, direct-labelled, tabular so they never jitter */}
+            {/* three readouts, one colour each, tabular so they never jitter */}
             <text
                 x={PAD}
                 y={44}
-                fill={INK_DARK}
+                fill={LFSR.state}
                 fontSize="12"
                 opacity={recede}
                 style={{ ...ease, fontVariantNumeric: "tabular-nums" }}
             >
-                {`register  ${bits.join("")}`}
+                {`state  ${bits.join("")}`}
+            </text>
+            <text
+                x={VIEW_W / 2}
+                y={44}
+                textAnchor="middle"
+                fill={LFSR.tap}
+                fontSize="12"
+                opacity={dim("taps")}
+                style={{ ...ease, fontVariantNumeric: "tabular-nums" }}
+                {...hover("taps")}
+            >
+                {`b3 ⊕ b4 = ${incoming}`}
             </text>
             <text
                 x={VIEW_W - PAD}
                 y={44}
                 textAnchor="end"
-                fill={PARTNER}
+                fill={LFSR.output}
                 fontSize="12"
                 opacity={dim("output")}
                 style={{ ...ease, fontVariantNumeric: "tabular-nums" }}
                 {...hover("output")}
             >
-                {`output bit  ${output === null ? "—" : output}`}
+                {`output  ${output === null ? "—" : output}`}
             </text>
 
             {/* cells 1 and 2: plain structure */}
@@ -137,7 +148,7 @@ function OneClockTickDrawing() {
                         height={CELL_H}
                         rx={8}
                         fill="#FFFFFF"
-                        stroke={INK}
+                        stroke={LFSR.ink}
                         strokeWidth={2}
                         style={{ cursor: "pointer" }}
                         onClick={() => flipCell(index)}
@@ -149,10 +160,10 @@ function OneClockTickDrawing() {
                         x={cellCenterX(index)}
                         y={CELL_Y - 12}
                         textAnchor="middle"
-                        fill={INK}
+                        fill={LFSR.ink}
                         fontSize="11"
                     >
-                        {index + 1}
+                        {`b${index + 1}`}
                     </text>
                 ))}
             </g>
@@ -160,12 +171,12 @@ function OneClockTickDrawing() {
             {/* the tapped cells, the wires that read them, and the XOR gate */}
             <g opacity={dim("taps")} style={ease} {...hover("taps")}>
                 {isOn("taps") && (
-                    <path d={tapPath} fill="none" stroke={ACCENT} strokeWidth={9} opacity={0.28} strokeLinecap="round" />
+                    <path d={tapPath} fill="none" stroke={LFSR.tap} strokeWidth={9} opacity={0.28} strokeLinecap="round" />
                 )}
                 <path
                     d={tapPath}
                     fill="none"
-                    stroke={ACCENT}
+                    stroke={LFSR.tap}
                     strokeWidth={isOn("taps") ? 4 : 2.5}
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -180,7 +191,7 @@ function OneClockTickDrawing() {
                         height={CELL_H}
                         rx={8}
                         fill="#FFFFFF"
-                        stroke={ACCENT}
+                        stroke={LFSR.tap}
                         strokeWidth={isOn("taps") ? 4 : 2.5}
                         style={{ ...ease, cursor: "pointer" }}
                         onClick={() => flipCell(index)}
@@ -191,29 +202,29 @@ function OneClockTickDrawing() {
                     cy={gateY}
                     r={16}
                     fill="#FFFFFF"
-                    stroke={ACCENT}
+                    stroke={LFSR.tap}
                     strokeWidth={isOn("taps") ? 4 : 2.5}
                     style={ease}
                 />
-                <line x1={gateX - 11} y1={gateY} x2={gateX + 11} y2={gateY} stroke={ACCENT} strokeWidth={2} />
-                <line x1={gateX} y1={gateY - 11} x2={gateX} y2={gateY + 11} stroke={ACCENT} strokeWidth={2} />
-                <text x={gateX + 26} y={gateY + 4} fill={ACCENT} fontSize="12">
+                <line x1={gateX - 11} y1={gateY} x2={gateX + 11} y2={gateY} stroke={LFSR.tap} strokeWidth={2} />
+                <line x1={gateX} y1={gateY - 11} x2={gateX} y2={gateY + 11} stroke={LFSR.tap} strokeWidth={2} />
+                <text x={gateX + 26} y={gateY + 4} fill={LFSR.tap} fontSize="12">
                     XOR
                 </text>
-                <text x={gateX} y={182} textAnchor="middle" fill={ACCENT} fontSize="11">
-                    tapped
+                <text x={gateX} y={182} textAnchor="middle" fill={LFSR.tap} fontSize="11">
+                    taps
                 </text>
             </g>
 
             {/* the feedback wire carrying the XOR result back to the front cell */}
             <g opacity={dim("feedback")} style={ease} {...hover("feedback")}>
                 {isOn("feedback") && (
-                    <path d={feedbackPath} fill="none" stroke={ACCENT} strokeWidth={9} opacity={0.28} strokeLinecap="round" />
+                    <path d={feedbackPath} fill="none" stroke={LFSR.state} strokeWidth={9} opacity={0.28} strokeLinecap="round" />
                 )}
                 <path
                     d={feedbackPath}
                     fill="none"
-                    stroke={ACCENT}
+                    stroke={LFSR.state}
                     strokeWidth={isOn("feedback") ? 4 : 2.5}
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -221,9 +232,9 @@ function OneClockTickDrawing() {
                 />
                 <path
                     d={`M 144 ${CELL_Y + CELL_H / 2 - 6} L 152 ${CELL_Y + CELL_H / 2} L 144 ${CELL_Y + CELL_H / 2 + 6} Z`}
-                    fill={ACCENT}
+                    fill={LFSR.state}
                 />
-                <text x={210} y={206} textAnchor="middle" fill={ACCENT} fontSize="11">
+                <text x={210} y={206} textAnchor="middle" fill={LFSR.state} fontSize="11">
                     feedback
                 </text>
             </g>
@@ -236,7 +247,7 @@ function OneClockTickDrawing() {
                         y1={CELL_Y + CELL_H / 2}
                         x2={VIEW_W - PAD - 40}
                         y2={CELL_Y + CELL_H / 2}
-                        stroke={PARTNER}
+                        stroke={LFSR.output}
                         strokeWidth={9}
                         opacity={0.28}
                         strokeLinecap="round"
@@ -247,12 +258,12 @@ function OneClockTickDrawing() {
                     y1={CELL_Y + CELL_H / 2}
                     x2={VIEW_W - PAD - 40}
                     y2={CELL_Y + CELL_H / 2}
-                    stroke={PARTNER}
+                    stroke={LFSR.output}
                     strokeWidth={isOn("output") ? 4 : 2.5}
                     strokeLinecap="round"
                     style={ease}
                 />
-                <text x={VIEW_W - PAD} y={CELL_Y + CELL_H / 2 + 4} textAnchor="end" fill={PARTNER} fontSize="12">
+                <text x={VIEW_W - PAD} y={CELL_Y + CELL_H / 2 + 4} textAnchor="end" fill={LFSR.output} fontSize="12">
                     out
                 </text>
             </g>
@@ -267,13 +278,13 @@ function OneClockTickDrawing() {
                             width={CELL_W - 16}
                             height={CELL_H - 16}
                             rx={7}
-                            fill={index === 0 && ticks > 0 ? ACCENT : "#E2E8F0"}
+                            fill={index === 0 && ticks > 0 ? LFSR.state : LFSR.rest}
                         />
                         <text
                             x={cellCenterX(index)}
                             y={CELL_Y + CELL_H / 2 + 6}
                             textAnchor="middle"
-                            fill={index === 0 && ticks > 0 ? "#FFFFFF" : INK_DARK}
+                            fill={index === 0 && ticks > 0 ? "#FFFFFF" : LFSR.inkDark}
                             fontSize="18"
                             style={{ fontVariantNumeric: "tabular-nums" }}
                         >
@@ -289,7 +300,7 @@ function OneClockTickDrawing() {
                             width={CELL_W - 16}
                             height={CELL_H - 16}
                             rx={7}
-                            fill={PARTNER}
+                            fill={LFSR.output}
                         />
                         <text
                             x={cellCenterX(4)}
@@ -316,10 +327,10 @@ function OneClockTickFigure() {
         <Figure
             id="one-clock-tick"
             onReset={() => {
-                setVar("clockTickSeed", DEFAULT_SEED);
+                setVar("clockTickSeedValue", DEFAULT_SEED);
                 setVar("clockTickCount", 0);
             }}
-            caption="Four cells, with the two right-hand ones tapped. Click a cell to flip its bit, then press the clock to take a single tick."
+            caption="Four cells, tapped at b3 and b4. Click a cell to flip its bit, then press the clock to take a single tick."
         >
             <OneClockTickDrawing />
             <div className="flex items-center justify-center gap-3 px-6 pb-5">
@@ -357,38 +368,80 @@ export const oneClockTickBlocks: ReactElement[] = [
     <StackLayout key="layout-clock-tick-mechanism" maxWidth="xl">
         <Block id="clock-tick-mechanism" padding="sm">
             <EditableParagraph id="para-clock-tick-mechanism" blockId="clock-tick-mechanism">
-                A shift register is a row of cells, each holding one bit. On every clock tick each
-                bit slides one place right, the bit at the end drops out as the output, and a gap
-                opens at the front. What fills that gap is the whole idea: the XOR of{" "}
+                A shift register is a row of flip-flops holding the bits b1 to b4. On every clock
+                edge each bit slides one place right, b4 leaves along{" "}
+                <InlineLinkedHighlight
+                    id="link-clock-tick-output"
+                    varName="clockTickHighlight"
+                    highlightId="output"
+                    color={LFSR.output}
+                    bgColor="rgba(142, 144, 245, 0.2)"
+                >
+                    the output line
+                </InlineLinkedHighlight>
+                , and the front cell falls vacant. What fills it is the whole idea: the XOR of{" "}
                 <InlineLinkedHighlight
                     id="link-clock-tick-taps"
                     varName="clockTickHighlight"
                     highlightId="taps"
-                    {...linkedHighlightPropsFromDefinition(getVariableInfo('clockTickHighlight'))}
+                    color={LFSR.tap}
+                    bgColor="rgba(98, 208, 173, 0.2)"
                 >
-                    a few chosen cells
+                    the tapped cells
                 </InlineLinkedHighlight>
-                , fed{" "}
+                , carried{" "}
                 <InlineLinkedHighlight
                     id="link-clock-tick-feedback"
                     varName="clockTickHighlight"
                     highlightId="feedback"
-                    {...linkedHighlightPropsFromDefinition(getVariableInfo('clockTickHighlight'))}
+                    color={LFSR.state}
+                    bgColor="rgba(172, 139, 249, 0.2)"
                 >
-                    straight back to the front
+                    back to the front
                 </InlineLinkedHighlight>
-                .
+                . Over{" "}
+                <InlineTooltip color="#64748B" bgColor="rgba(100, 116, 139, 0.15)" id="tooltip-clock-tick-gf2" tooltip="GF(2) is the field with two elements, 0 and 1. Addition in it is exactly XOR and multiplication is AND, so a circuit of XOR gates computes a linear map.">
+                    GF(2)
+                </InlineTooltip>
+                {" "}XOR is addition, so this is a linear recurrence, not a scramble of arbitrary logic.
             </EditableParagraph>
+        </Block>
+    </StackLayout>,
+
+    <StackLayout key="layout-clock-tick-recurrence" maxWidth="xl">
+        <Block id="clock-tick-recurrence" padding="lg">
+            <FormulaBlock
+                showHint={true}
+                latex="\highlight{feedback}{b_1^+} = \highlight{taps}{b_3 \oplus b_4} \qquad \highlight{output}{y} = \highlight{output}{b_4}"
+                linkedHighlights={{
+                    feedback: { varName: 'clockTickHighlight', color: LFSR.state },
+                    taps: { varName: 'clockTickHighlight', color: LFSR.tap },
+                    output: { varName: 'clockTickHighlight', color: LFSR.output },
+                }}
+            />
         </Block>
     </StackLayout>,
 
     <StackLayout key="layout-clock-tick-worked-example" maxWidth="xl">
         <Block id="clock-tick-worked-example" padding="sm">
             <EditableParagraph id="para-clock-tick-worked-example" blockId="clock-tick-worked-example">
-                Take 1101, tapped at the two right-hand cells: 0 XOR 1 is 1, so a 1 takes the front
-                seat and the register reads 1110. Click any cell below to flip its bit, then press
-                the clock and watch the teal bit arrive at the front while the old right-hand bit
-                slides off the end.
+                Hold the register{" "}
+                <InlineTrigger
+                    id="trigger-clock-tick-seed-1101"
+                    varName="clockTickSeedValue"
+                    value={13}
+                    color={LFSR.state}
+                    bgColor="rgba(172, 139, 249, 0.15)"
+                >
+                    at 1101
+                </InlineTrigger>
+                {" "}and the tapped cells read{" "}
+                <InlineFormula
+                    latex="\clr{tap}{b_3} \oplus \clr{tap}{b_4} = 0 \oplus 1 = \clr{state}{1}"
+                    colorMap={{ tap: LFSR.tap, state: LFSR.state }}
+                />
+                , so a violet 1 takes the front seat and the state becomes 1110 while the old b4
+                leaves as the output bit. Click any cell below to flip it, then press the clock.
             </EditableParagraph>
         </Block>
     </StackLayout>,
@@ -402,14 +455,23 @@ export const oneClockTickBlocks: ReactElement[] = [
     <StackLayout key="layout-clock-tick-stream" maxWidth="xl">
         <Block id="clock-tick-stream" padding="sm">
             <EditableParagraph id="para-clock-tick-stream" blockId="clock-tick-stream">
-                One tick, one output bit. After{" "}
+                One tick, one output bit, so after{" "}
                 <InlineScrubbleNumber
                     varName="clockTickCount"
                     {...numberPropsFromDefinition(getVariableInfo('clockTickCount'))}
                 />
-                {" "}ticks the stream is that many bits long, fed by nothing but the bits already
-                inside. Everything this register will ever emit is settled by the bits you start
-                with.
+                {" "}ticks the stream is that many bits long, and you can{" "}
+                <InlineTrigger
+                    id="trigger-clock-tick-eight"
+                    varName="clockTickCount"
+                    value={8}
+                    color={LFSR.period}
+                    bgColor="rgba(247, 178, 59, 0.15)"
+                >
+                    run it eight ticks
+                </InlineTrigger>
+                {" "}at once. Nothing enters from outside: each state is a linear function of the
+                four bits you began with, so those four bits fix the entire stream.
             </EditableParagraph>
         </Block>
     </StackLayout>,
@@ -417,15 +479,15 @@ export const oneClockTickBlocks: ReactElement[] = [
     <StackLayout key="layout-clock-tick-question-next-state" maxWidth="xl">
         <Block id="clock-tick-question-next-state" padding="md">
             <EditableParagraph id="para-clock-tick-question-next-state" blockId="clock-tick-question-next-state">
-                Starting instead from 0110, with the same two taps, one tick later the register
-                reads{" "}
+                Starting instead from 0110, with the same taps at b3 and b4, one tick later the
+                state reads{" "}
                 <InlineFeedback
                     varName="answer_clock_tick_next_state"
                     correctValue="1011"
                     position="terminal"
-                    successMessage="— exactly: 1 XOR 0 is 1, that 1 takes the front seat, and the old right-hand 0 leaves as the output"
+                    successMessage="— exactly: 1 XOR 0 is 1, that 1 takes the front seat, and the old b4 leaves as the output"
                     failureMessage="— not quite."
-                    hint="Read the two right-hand cells while the register still holds 0110, then let everything slide"
+                    hint="Read b3 and b4 while the register still holds 0110, then let everything slide"
                     visualizationHint={{
                         blockId: "clock-tick-visual",
                         hintKey: "feedback-clock-tick-next-state",
@@ -433,14 +495,14 @@ export const oneClockTickBlocks: ReactElement[] = [
                         steps: [
                             {
                                 gesture: "click",
-                                label: "Click the cells until they read 0110, then press the clock once",
+                                label: "The register is now set to 0110 — press the clock once and read the new state",
                                 position: { x: "44%", y: "85%" },
                                 completionVar: "clockTickCount",
                                 completionValue: 1,
                                 completionTolerance: 0,
                             },
                         ],
-                        resetVars: { clockTickCount: 0 },
+                        resetVars: { clockTickSeedValue: 6, clockTickCount: 0 },
                     }}
                 >
                     <InlineClozeInput
@@ -461,8 +523,8 @@ export const oneClockTickBlocks: ReactElement[] = [
                     varName="answer_clock_tick_feedback_destination"
                     correctValue="the front cell"
                     position="terminal"
-                    successMessage="— right: the tail is where a bit leaves, the front is where the fed-back bit arrives"
-                    failureMessage="— have another look at where that teal wire ends."
+                    successMessage="— right: b4 is where a bit leaves, b1 is where the fed-back bit arrives"
+                    failureMessage="— have another look at where that violet wire ends."
                     hint="Follow the feedback wire from the gate and see which cell it points into"
                     visualizationHint={{
                         blockId: "clock-tick-visual",
@@ -471,7 +533,7 @@ export const oneClockTickBlocks: ReactElement[] = [
                         steps: [
                             {
                                 gesture: "click",
-                                label: "Press the clock once and watch which end the teal bit appears at",
+                                label: "Press the clock once and watch which end the violet bit appears at",
                                 position: { x: "44%", y: "85%" },
                                 completionVar: "clockTickCount",
                                 completionValue: 1,
